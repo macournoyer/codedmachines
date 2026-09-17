@@ -31,8 +31,8 @@ nav a, .tag, .section, .num, .caption, .corner, .entry-meta, .readout, .pager, .
 .logo { display: flex; align-items: center; gap: 12px; text-decoration: none; font-weight: 700; letter-spacing: .02em; white-space: nowrap; }
 .logo svg { width: 28px; height: 28px; border-radius: 3px; box-shadow: 0 0 0 1px var(--line); }
 .top nav { display: flex; white-space: nowrap; }
-nav a { font-size: 13px; color: var(--dim); text-decoration: none; margin-left: clamp(16px, 3vw, 28px); transition: color .15s; }
-nav a:hover { color: var(--paper); }
+.top nav a { font-size: 13px; color: var(--dim); text-decoration: none; margin-left: clamp(16px, 3vw, 28px); transition: color .15s; }
+.top nav a:hover { color: var(--paper); }
 .bottom { border-top: 1px solid var(--line); margin-top: clamp(56px, 8vw, 96px); font-size: 12px; color: var(--dim); letter-spacing: .04em; }
 .bottom .wrap { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 12px 32px; padding-block: 28px; }
 .bottom .links { display: flex; flex-wrap: wrap; gap: 8px 22px; }
@@ -120,6 +120,9 @@ h1 em { font-style: normal; color: var(--red); }
 .pager a:hover { color: var(--red); }
 .single { padding-top: clamp(16px, 4vw, 40px); }
 .single .entry:first-child { border-top: 0; }
+.single .entry-photo { grid-template-columns: 1fr; }
+.single .entry-photo .entry-meta { flex-direction: row; gap: 4px 20px; padding-top: 0; }
+.single .entry-photo .prose { font-size: 19px; color: var(--paper); }
 
 /* Newsletter */
 .signup { padding-top: clamp(56px, 8vw, 96px); display: grid; grid-template-columns: 1fr 2fr; gap: 40px; }
@@ -165,7 +168,7 @@ h3 { font-size: 22px; letter-spacing: -.01em; margin: 10px 0 10px; font-weight: 
   .top nav a:first-child { display: none; }
   .top .wrap { gap: 8px; }
   .logo { gap: 10px; font-size: 16px; }
-  nav a { font-size: 11px; letter-spacing: .06em; margin-left: 14px; }
+  .top nav a { font-size: 11px; letter-spacing: .06em; margin-left: 14px; }
   .corner { font-size: 9px; }
 }
 @media (prefers-reduced-motion: reduce) {
@@ -174,3 +177,8 @@ h3 { font-size: 22px; letter-spacing: -.01em; margin: 10px 0 10px; font-weight: 
   .frame img, .player .play { transition: none; }
   .frame:hover img { transform: none; }
 }
+
+/* Not found */
+.lost { padding-block: clamp(80px, 14vw, 160px); }
+.lost p { color: var(--soft); max-width: 34em; }
+.lost a { color: var(--paper); text-decoration-color: var(--red); text-decoration-thickness: 2px; text-underline-offset: 4px; }

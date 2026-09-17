@@ -111,7 +111,10 @@ def candidates(args)
     end
   days.select! { |d| Dir.exist?(File.join(ARCHIVE, d)) }
   data = write_review(days)
-  die("no daylight stills found for #{days.join(', ')}") if data.empty?
+  if data.empty?
+    puts "Nothing to review: every week so far has its photo."
+    return
+  end
   if do_notify
     notify(data)
     remind
@@ -145,6 +148,7 @@ def photo(args)
   File.write(File.join(SITE, post), <<~POST)
     ---
     type: photo
+    title: Week #{format('%02d', week_of(day))} on the bench
     date: #{day} #{time.tr('-', ':')} #{Time.now.strftime('%z')}
     photo: /#{image}
     image: /#{image}
@@ -313,9 +317,10 @@ REVIEW_PAGE = <<~'HTML'
       Object.assign($("box").style, { left: left + "px", top: top + "px", width: w + "px", height: h + "px" }); render(); };
     v.onpointerup = () => { drag = null; };
     v.ondragstart = e => e.preventDefault();
+    if (!Object.keys(DATA).length) document.body.innerHTML = '<header><h1>Bench photo review</h1></header><p class="check"><b>Nothing to review.</b> Every week so far has its photo. New stills show up here after Sunday&rsquo;s run, or run <code>bin/bench candidates</code>.</p>';
     // ?pick=DAY/HH-MM-SS&caption=... opens on that still with a draft caption, ready to check and publish.
     const q = new URLSearchParams(location.search), [pd, pt] = (q.get("pick") || "").split("/");
-    if (DATA[pd]) { setDay(pd); const i = frames().findIndex(f => f.t === pt); if (i >= 0) idx = i; $("caption").value = q.get("caption") || ""; render(); }
+    if (!Object.keys(DATA).length) {} else if (DATA[pd]) { setDay(pd); const i = frames().findIndex(f => f.t === pt); if (i >= 0) idx = i; $("caption").value = q.get("caption") || ""; render(); }
     else setDay(Object.keys(DATA).at(-1));
   </script></body></html>
 HTML

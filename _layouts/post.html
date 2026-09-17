@@ -1,0 +1,12 @@
+---
+layout: default
+---
+<div class="wrap single">
+  {% include entry.html entry=page %}
+  <nav class="pager">
+    {% if page.previous %}<a href="{{ page.previous.url | relative_url }}">Earlier: {{ page.previous.date | date: "%b %-d" }}</a>{% else %}<span></span>{% endif %}
+    <a href="/#log">All entries</a>
+    {% if page.next %}<a href="{{ page.next.url | relative_url }}">Later: {{ page.next.date | date: "%b %-d" }}</a>{% else %}<span></span>{% endif %}
+  </nav>
+  {% include newsletter.html %}
+</div>

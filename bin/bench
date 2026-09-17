@@ -1,0 +1,328 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+#
+# bench: the publishing tool for codedmachines.com.
+#
+#   bin/bench candidates [DATE] [--notify]
+#       Build the private review page on rig for one day, or by default for
+#       every build week (counted from build_start in _config.yml) that has no
+#       published photo yet. One photo a week is the rhythm.
+#   bin/bench photo DATE/HH-MM-SS "Caption" [--crop WxH+X+Y] [--no-push]
+#       Publish one approved still: strip metadata, resize, write the post,
+#       commit and push. This is the only way a bench photo reaches the repo.
+#   bin/bench demo NAME "Title"     Copy a song from megasampler/demos, draft its post.
+#   bin/bench note "Title"          Draft a note.
+#   bin/bench serve [PORT]          The review page with a Publish button (runs on rig as
+#                                   bench-review.service, at http://rig.local/office/review/).
+#
+# Nothing from the webcam archive is copied anywhere until `photo` is run.
+
+require "date"
+require "json"
+require "fileutils"
+require "open3"
+
+SITE     = File.expand_path("..", __dir__)
+ARCHIVE  = File.expand_path("~/storage/office")
+REVIEW   = File.join(ARCHIVE, "review")
+REVIEW_URL = "http://rig.local/office/review/"
+DEMOS    = File.expand_path("~/projects/megasampler/demos")
+PER_DAY  = 8      # suggested stills per day
+MIN_LUMA = 0.22   # below this the room is dark
+TODO     = "Pick this week's bench photo"
+
+def die(msg) = abort("bench: #{msg}")
+
+def run!(*cmd, chdir: SITE)
+  out, status = Open3.capture2e(*cmd, chdir: chdir)
+  die("#{cmd.join(' ')} failed:\n#{out}") unless status.success?
+  out
+end
+
+def slugify(text) = text.downcase.gsub(/[^a-z0-9]+/, "-").gsub(/\A-|-\z/, "")
+
+def build_start = Date.parse(File.read(File.join(SITE, "_config.yml"))[/^build_start:\s*(\S+)/, 1])
+
+def week_of(day) = (Date.parse(day.to_s) - build_start).to_i / 7 + 1
+
+def published_days
+  Dir[File.join(SITE, "_posts", "*.md")].filter_map do |path|
+    File.basename(path)[0, 10] if File.read(path, 400).match?(/^type: photo$/)
+  end
+end
+
+# -- candidates ---------------------------------------------------------------
+
+def luma(path)
+  out, = Open3.capture2("convert", path, "-resize", "64x36", "-colorspace", "Gray", "-format", "%[fx:mean]", "info:")
+  out.to_f
+end
+
+# Daylight frames for a day, with the suggested picks spread evenly across them.
+def frames_for(day)
+  FileUtils.mkdir_p(REVIEW)
+  cache_path = File.join(REVIEW, ".luma-#{day}.json")
+  cache = File.exist?(cache_path) ? JSON.parse(File.read(cache_path)) : {}
+  files = Dir[File.join(ARCHIVE, day, "*.jpg")].sort
+  files.each { |f| cache[File.basename(f)] ||= luma(f) }
+  File.write(cache_path, JSON.generate(cache))
+
+  lit = files.map { |f| File.basename(f, ".jpg") }.select { |t| cache["#{t}.jpg"] >= MIN_LUMA }
+  picks = lit.size <= PER_DAY ? lit : (0...PER_DAY).map { |i| lit[((i + 0.5) * lit.size / PER_DAY).floor] }
+  lit.map { |t| { "t" => t, "pick" => picks.include?(t) } }
+end
+
+def write_review(days)
+  data = days.to_h { |day| [day, frames_for(day)] }.reject { |_, frames| frames.empty? }
+  FileUtils.mkdir_p(REVIEW)
+  File.write(File.join(REVIEW, "index.html"), REVIEW_PAGE.sub("__DATA__") { JSON.generate(data) }.sub("__SITE__") { SITE }.sub("__START__") { build_start.to_s })
+  data
+end
+
+def notify(data)
+  env = File.readlines(File.expand_path("~/.env")).filter_map { |l| l.strip.match(/\A(?:export\s+)?(PUSHOVER_\w+)=["']?([^"'\s]+)/)&.captures }.to_h
+  weeks = data.keys.map { |d| week_of(d) }.uniq
+  message = "This week's bench photos are ready to review#{weeks.size > 1 ? " (#{weeks.size} weeks without a photo)" : ''}."
+  run!("curl", "-s", "--form-string", "token=#{env['PUSHOVER_API_TOKEN']}", "--form-string", "user=#{env['PUSHOVER_USER_KEY']}",
+       "--form-string", "title=Coded Machines", "--form-string", "message=#{message}",
+       "--form-string", "url=#{REVIEW_URL}", "--form-string", "url_title=Pick this week's photo",
+       "https://api.pushover.net/1/messages.json")
+end
+
+# A Todoist task alongside the push, so the review isn't forgotten. Skipped while the last one is still open.
+def remind
+  token = File.read(File.expand_path("~/.config/todoist/token")).strip
+  auth = ["-H", "Authorization: Bearer #{token}"]
+  api = "https://api.todoist.com/api/v1/tasks"
+  open_tasks = JSON.parse(run!("curl", "-s", *auth, "--get", "--data-urlencode", "query=search: #{TODO}", "#{api}/filter"))
+  return unless open_tasks["results"].empty?
+  task = { content: "[#{TODO}](#{REVIEW_URL})", description: "Check for anything sensitive, then run the copied `bin/bench photo` command.", due_string: "today" }
+  run!("curl", "-s", "-f", "-X", "POST", *auth, "-H", "Content-Type: application/json", "-d", JSON.generate(task), api)
+end
+
+def candidates(args)
+  do_notify = args.delete("--notify")
+  days =
+    if args.first
+      [args.first]
+    else
+      done = published_days.map { |d| week_of(d) }
+      (build_start..Date.today).reject { |d| done.include?(week_of(d)) }.map(&:to_s)
+    end
+  days.select! { |d| Dir.exist?(File.join(ARCHIVE, d)) }
+  data = write_review(days)
+  die("no daylight stills found for #{days.join(', ')}") if data.empty?
+  if do_notify
+    notify(data)
+    remind
+  end
+  puts "#{data.keys.map { |d| week_of(d) }.uniq.size} week(s), #{data.size} day(s), #{data.values.sum(&:size)} stills to look through: #{REVIEW_URL}"
+end
+
+# -- photo --------------------------------------------------------------------
+
+def photo(args)
+  push = !args.delete("--no-push")
+  crop = (i = args.index("--crop")) ? args.slice!(i, 2).last : nil
+  ref, caption = args
+  die("usage: bench photo DATE/HH-MM-SS \"Caption\" [--crop WxH+X+Y] [--no-push]") unless ref&.match?(%r{\A\d{4}-\d\d-\d\d/\d\d-\d\d-\d\d\z}) && caption
+  die("crop must look like 1600x900+120+80") if crop && !crop.match?(/\A\d+x\d+\+\d+\+\d+\z/)
+
+  day, time = ref.split("/")
+  source = File.join(ARCHIVE, "#{ref}.jpg")
+  die("no such still: #{source}") unless File.exist?(source)
+  die("#{day} already has a photo; delete its post first to replace it") if published_days.include?(day)
+  warn "bench: note, week #{week_of(day)} already has a photo; publishing another." if published_days.any? { |d| week_of(d) == week_of(day) }
+
+  image = "photos/#{day}.jpg"
+  post  = "_posts/#{day}-bench.md"
+  FileUtils.mkdir_p(File.join(SITE, "photos"))
+  convert = ["convert", source, "-auto-orient"]
+  convert += ["-crop", crop, "+repage"] if crop
+  convert += ["-resize", "1600x>", "-strip", "-interlace", "Plane", "-quality", "84", File.join(SITE, image)]
+  run!(*convert)
+
+  File.write(File.join(SITE, post), <<~POST)
+    ---
+    type: photo
+    date: #{day} #{time.tr('-', ':')} #{Time.now.strftime('%z')}
+    photo: /#{image}
+    image: /#{image}
+    ---
+
+    #{caption}
+  POST
+
+  run!("git", "add", image, post)
+  run!("git", "commit", "-m", "Bench photo #{day}", "--", image, post)
+  puts "Committed #{image} and #{post}."
+  if push
+    run!("git", "push")
+    puts "Pushed. Live at https://codedmachines.com/ in a minute or two."
+  else
+    puts "Not pushed (--no-push). Run `git push` when ready."
+  end
+end
+
+# -- demo / note --------------------------------------------------------------
+
+def draft(path, front, body)
+  full = File.join(SITE, path)
+  die("#{path} already exists") if File.exist?(full)
+  File.write(full, "---\n#{front.map { |k, v| "#{k}: #{v}" }.join("\n")}\n---\n\n#{body}\n")
+  puts "Drafted #{path}. Write it, preview with `bundle exec jekyll serve`, then commit and push."
+end
+
+def demo(args)
+  name, title = args
+  die("usage: bench demo NAME \"Title\"") unless name && title
+  mp3 = File.join(DEMOS, name, "#{name}.mp3")
+  die("no such demo: #{mp3}") unless File.exist?(mp3)
+  FileUtils.mkdir_p(File.join(SITE, "demos"))
+  # Copy the audio without its tags; they carry internal project names.
+  run!("ffmpeg", "-v", "error", "-y", "-i", mp3, "-c", "copy", "-map_metadata", "-1",
+       "-metadata", "title=#{title}", "-metadata", "artist=Coded Machines", File.join(SITE, "demos", "#{name}.mp3"))
+  draft("_posts/#{Date.today}-#{slugify(title)}.md",
+        { type: "demo", title: title, date: Time.now.strftime("%F %T %z"), audio: "/demos/#{name}.mp3", specs: "BPM?" },
+        "What is this song, and what does it show?")
+end
+
+def note(args)
+  title = args.first or die("usage: bench note \"Title\"")
+  draft("_posts/#{Date.today}-#{slugify(title)}.md", { type: "note", title: title, date: Time.now.strftime("%F %T %z") }, "Write here.")
+end
+
+# -- serve --------------------------------------------------------------------
+
+# Serves the review page and publishes the still you pick. Publishing here is
+# the same approval as running `bench photo` by hand: one still, named by you.
+def serve(args)
+  require "webrick"
+  server = WEBrick::HTTPServer.new(BindAddress: "127.0.0.1", Port: (args.first || 8797).to_i, AccessLog: [])
+  server.mount_proc("/") do |req, res|
+    next res.status = 404 unless req.path == "/"
+    res["Content-Type"] = "text/html; charset=utf-8"
+    res["Cache-Control"] = "no-store"
+    res.body = File.read(File.join(REVIEW, "index.html"))
+  end
+  server.mount_proc("/publish") do |req, res|
+    res["Content-Type"] = "application/json"
+    # The custom header forces a CORS preflight, which is never answered, so other sites can't post here.
+    unless req.request_method == "POST" && req["X-Bench"] == "publish"
+      res.status = 403
+      next res.body = JSON.generate(ok: false, output: "Forbidden")
+    end
+    form = JSON.parse(req.body.to_s)
+    caption = form["caption"].to_s.strip
+    cmd = [RbConfig.ruby, __FILE__, "photo", form["ref"].to_s, caption]
+    cmd += ["--crop", form["crop"].to_s] if form["crop"]
+    cmd << "--no-push" if form["push"] == false
+    output, status = caption.empty? ? ["Write a caption first.", nil] : Open3.capture2e(*cmd)
+    ok = status&.success? || false
+    Open3.capture2e(RbConfig.ruby, __FILE__, "candidates") if ok   # the published week drops off the page
+    res.status = ok ? 200 : 422
+    res.body = JSON.generate(ok: ok, output: output.sub(/\Abench: /, ""))
+  end
+  %w[INT TERM].each { |sig| trap(sig) { server.shutdown } }
+  server.start
+end
+
+# -- review page --------------------------------------------------------------
+
+REVIEW_PAGE = <<~'HTML'
+  <!doctype html>
+  <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Bench photo review</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; background: #0b0b0b; color: #f2efe8; font: 15px/1.5 system-ui, sans-serif; }
+    header, .tools { padding: 12px 16px; display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: center; }
+    h1 { font-size: 16px; margin: 0 auto 0 0; }
+    select, input, button { font: inherit; color: inherit; background: #151515; border: 1px solid #2a2a2a; padding: 8px 10px; border-radius: 4px; }
+    button { cursor: pointer; } button:hover { border-color: #e8321e; }
+    #view { display: block; width: 100%; height: auto; cursor: crosshair; }
+    .stage { position: relative; } #box { position: absolute; border: 2px solid #e8321e; background: rgba(232,50,30,.12); pointer-events: none; display: none; }
+    #caption { flex: 1 1 320px; }
+    #publish { background: #e8321e; border-color: #e8321e; font-weight: 600; } #publish:disabled { opacity: .5; cursor: wait; }
+    .nopush { color: #bdb9b1; }
+    #result { margin: 0 16px 12px; padding: 12px; white-space: pre-wrap; display: none; border-left: 3px solid #3c9a5f; background: #151515; } #result.bad { border-color: #e8321e; }
+    .manual { margin: 0 16px 12px; color: #8d8a84; } .manual summary { cursor: pointer; margin-bottom: 8px; } .manual button { margin-top: 8px; }
+    #cmd { display: block; margin: 0; padding: 12px; background: #151515; border-left: 3px solid #e8321e; font: 13px/1.5 ui-monospace, monospace; overflow-wrap: anywhere; user-select: all; }
+    .check { margin: 0 16px 12px; color: #bdb9b1; } .check b { color: #f2efe8; }
+    #strip { display: flex; gap: 6px; overflow-x: auto; padding: 0 16px 20px; }
+    #strip img { height: 72px; width: 128px; object-fit: cover; opacity: .45; border: 2px solid transparent; cursor: pointer; flex: none; }
+    #strip img.pick { opacity: .9; } #strip img.on { opacity: 1; border-color: #e8321e; }
+  </style></head><body>
+  <header><h1>Bench photo review</h1><select id="day" aria-label="Day"></select><span id="stamp"></span>
+    <button id="prev">← Earlier</button><button id="next">Later →</button></header>
+  <div class="stage"><img id="view" alt="Candidate still, full size"><div id="box"></div></div>
+  <p class="check"><b>Before publishing, look for:</b> readable screens (file names, code, chat), handwritten notes and labels, shipping boxes with addresses, part numbers you want private, faces or people, anything reflected in glass. Drag on the photo to crop; click once to clear the crop.</p>
+  <div class="tools"><input id="caption" placeholder="Caption: what happened on the bench this week?"><label class="nopush"><input type="checkbox" id="nopush"> Commit only, don't push</label><button id="publish">Publish to codedmachines.com</button></div>
+  <p id="result" role="status"></p>
+  <details class="manual"><summary>Or run it by hand</summary><code id="cmd"></code><button id="copy">Copy command</button></details>
+  <div id="strip"></div>
+  <script>
+    const DATA = __DATA__, SITE = "__SITE__", START = Date.parse("__START__");
+    const week = d => Math.floor((Date.parse(d) - START) / 6048e5) + 1;
+    const $ = id => document.getElementById(id);
+    let day, idx = 0, crop = null, drag = null;
+    const frames = () => DATA[day];
+    const src = f => `/office/${day}/${f.t}.jpg`;
+    function render() {
+      const f = frames()[idx];
+      $("view").src = src(f); $("stamp").textContent = f.t.replaceAll("-", ":");
+      [...$("strip").children].forEach((el, i) => el.classList.toggle("on", i === idx));
+      $("strip").children[idx]?.scrollIntoView({ inline: "center", block: "nearest" });
+      const q = s => `'${s.replaceAll("'", `'\\''`)}'`;
+      $("cmd").textContent = `${SITE}/bin/bench photo ${day}/${f.t} ${q($("caption").value || "CAPTION")}` + (crop ? ` --crop ${crop}` : "");
+      $("box").style.display = crop ? "block" : "none";
+    }
+    function setDay(d) {
+      day = d; crop = null; $("day").value = d;
+      $("strip").innerHTML = "";
+      frames().forEach((f, i) => { const im = new Image(); im.loading = "lazy"; im.src = src(f); im.title = f.t; if (f.pick) im.className = "pick"; im.onclick = () => { idx = i; render(); }; $("strip").append(im); });
+      idx = Math.max(0, frames().findIndex(f => f.pick)); render();
+    }
+    function step(n) { const picks = frames().map((f, i) => f.pick ? i : -1).filter(i => i >= 0); const next = n > 0 ? picks.find(i => i > idx) : picks.reverse().find(i => i < idx); if (next !== undefined) { idx = next; render(); } }
+    Object.keys(DATA).forEach(d => $("day").add(new Option(`Week ${week(d)}, ${d} (${DATA[d].length} stills)`, d)));
+    $("day").onchange = e => setDay(e.target.value);
+    $("prev").onclick = () => step(-1); $("next").onclick = () => step(1);
+    $("caption").oninput = render;
+    $("copy").onclick = () => navigator.clipboard?.writeText($("cmd").textContent).then(() => { $("copy").textContent = "Copied"; setTimeout(() => $("copy").textContent = "Copy command", 1500); });
+    const LABEL = "Publish to codedmachines.com";
+    $("publish").onclick = async () => {
+      const f = frames()[idx], caption = $("caption").value.trim(), out = $("result"), push = !$("nopush").checked;
+      const show = (ok, text) => { out.style.display = "block"; out.className = ok ? "" : "bad"; out.textContent = text; };
+      if (!caption) { show(false, "Write a caption first."); $("caption").focus(); return; }
+      const what = `the still from ${day} ${f.t.replaceAll("-", ":")}${crop ? ", cropped" : ""}`;
+      if (!confirm(push ? `Publish ${what}?\n\n"${caption}"\n\nIt goes to the public site and stays in its git history.` : `Commit ${what} without pushing?\n\n"${caption}"`)) return;
+      $("publish").disabled = true; $("publish").textContent = "Publishing…";
+      try {
+        const r = await fetch("publish", { method: "POST", headers: { "Content-Type": "application/json", "X-Bench": "publish" }, body: JSON.stringify({ ref: `${day}/${f.t}`, caption, crop, push }) });
+        const j = await r.json(); show(j.ok, j.output.trim());
+        if (j.ok) { $("publish").textContent = "Published"; return; }
+      } catch (e) { show(false, `Couldn't reach the review server: ${e.message}`); }
+      $("publish").disabled = false; $("publish").textContent = LABEL;
+    };
+    document.onkeydown = e => { if (e.target.tagName === "INPUT") return; if (e.key === "ArrowLeft") step(-1); if (e.key === "ArrowRight") step(1); };
+    // Drag to crop, locked to 16:9 so every photo fits the site the same way.
+    const v = $("view"), pos = e => { const r = v.getBoundingClientRect(); return [Math.min(Math.max(e.clientX - r.left, 0), r.width), Math.min(Math.max(e.clientY - r.top, 0), r.height), r]; };
+    v.onpointerdown = e => { e.preventDefault(); v.setPointerCapture(e.pointerId); const [x, y] = pos(e); drag = [x, y]; crop = null; render(); };
+    v.onpointermove = e => { if (!drag) return; const [x, , r] = pos(e); let w = Math.abs(x - drag[0]), h = w * 9 / 16; const left = Math.min(x, drag[0]); const top = Math.min(drag[1], r.height - h);
+      if (w < 40) return; const k = v.naturalWidth / r.width; crop = `${Math.round(w * k)}x${Math.round(h * k)}+${Math.round(left * k)}+${Math.round(top * k)}`;
+      Object.assign($("box").style, { left: left + "px", top: top + "px", width: w + "px", height: h + "px" }); render(); };
+    v.onpointerup = () => { drag = null; };
+    v.ondragstart = e => e.preventDefault();
+    setDay(Object.keys(DATA).at(-1));
+  </script></body></html>
+HTML
+
+command = ARGV.shift
+case command
+when "candidates" then candidates(ARGV)
+when "photo"      then photo(ARGV)
+when "demo"       then demo(ARGV)
+when "note"       then note(ARGV)
+when "serve"      then serve(ARGV)
+else puts File.read(__FILE__)[/^# bench:.*?(?=^\n|^require)/m].gsub(/^# ?/, "")
+end

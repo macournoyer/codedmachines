@@ -1,0 +1,35 @@
+title: Coded Machines
+tagline: Electronic musical instruments
+description: >-
+  Coded Machines designs and builds electronic musical instruments. Follow the
+  first one, a hands-on performance sampler, as it gets built: a photo from the
+  bench every week, songs made with it, and notes on progress.
+url: https://codedmachines.com
+email: hello@codedmachines.com
+instagram: codedmachines
+timezone: America/Toronto
+
+# First day of the build, a Monday. Entries show "Week N" counted from here.
+build_start: 2026-08-17
+
+permalink: /log/:year/:month/:day/:title/
+paginate: 20
+paginate_path: /page/:num/
+
+plugins:
+  - jekyll-feed
+  - jekyll-paginate
+  - jekyll-sitemap
+
+feed:
+  path: /feed.xml
+
+defaults:
+  - scope: { path: "", type: posts }
+    values: { layout: post }
+
+exclude:
+  - bin
+  - README.md
+  - Gemfile
+  - Gemfile.lock

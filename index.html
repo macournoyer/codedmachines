@@ -1,208 +1,96 @@
-<!doctype html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Coded Machines — Electronic musical instruments</title>
-<meta name="description" content="Coded Machines designs and builds electronic musical instruments. Our first instrument, a hands-on performance sampler, is in development.">
-<meta property="og:type" content="website">
-<meta property="og:url" content="https://codedmachines.com/">
-<meta property="og:title" content="Coded Machines">
-<meta property="og:description" content="Electronic musical instruments, designed and built from the circuit up. First instrument in development.">
-<meta name="theme-color" content="#0b0b0b">
-<link rel="icon" href="favicon.svg" type="image/svg+xml">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
-<style>
-  :root {
-    --ink: #0b0b0b;
-    --panel: #151515;
-    --line: #2a2a2a;
-    --paper: #f2efe8;
-    --dim: #8d8a84;
-    --red: #e8321e;
-    --sans: "Space Grotesk", system-ui, -apple-system, "Segoe UI", sans-serif;
-    --mono: "Space Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
-  }
-  * { box-sizing: border-box; }
-  html, body { margin: 0; background: var(--ink); color: var(--paper); }
-  body { font-family: var(--sans); font-size: 17px; line-height: 1.55; -webkit-font-smoothing: antialiased; }
-  a { color: inherit; }
-  .wrap { max-width: 1120px; margin: 0 auto; padding-inline: clamp(20px, 5vw, 48px); }
+---
+layout: default
+---
+{%- assign first_page = true -%}
+{%- if paginator.page > 1 %}{% assign first_page = false %}{% endif -%}
+{%- assign photos = site.posts | where: "type", "photo" -%}
+{%- assign latest = photos | first -%}
 
-  header { border-bottom: 1px solid var(--line); }
-  header .wrap { display: flex; align-items: center; justify-content: space-between; height: 72px; }
-  .logo { display: flex; align-items: center; gap: 12px; text-decoration: none; font-weight: 700; letter-spacing: .02em; }
-  .logo svg { width: 28px; height: 28px; }
-  nav a { font-family: var(--mono); font-size: 13px; text-transform: uppercase; letter-spacing: .08em; color: var(--dim); text-decoration: none; margin-left: 28px; }
-  nav a:hover { color: var(--paper); }
+{% if first_page %}
+<div class="wrap">
+  <section class="hero">
+    <span class="tag">In development</span>
+    <h1>It&rsquo;s time for a <em>modern</em> sampler.</h1>
+    <p class="lede">We&rsquo;re building one: a hands-on performance sampler and sequencer. This is the bench it&rsquo;s being built on, photographed every week, with the songs it plays and notes on how it&rsquo;s going.</p>
+  </section>
+</div>
 
-  .hero { padding-block: clamp(64px, 11vw, 128px) clamp(48px, 8vw, 96px); }
-  .tag { font-family: var(--mono); font-size: 13px; letter-spacing: .12em; text-transform: uppercase; color: var(--red); display: inline-flex; align-items: center; gap: 10px; }
-  .tag::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--red); box-shadow: 0 0 12px var(--red); animation: pulse 2.4s ease-in-out infinite; }
-  @keyframes pulse { 50% { opacity: .35; } }
-  h1 { font-size: clamp(44px, 8.2vw, 104px); line-height: .98; letter-spacing: -.035em; font-weight: 700; margin: 22px 0 28px; max-width: 13ch; }
-  h1 em { font-style: normal; color: var(--red); }
-  .lede { font-size: clamp(18px, 2.1vw, 22px); color: #cfcbc3; max-width: 36em; margin: 0; }
+{% if latest %}
+<figure class="today" id="instrument">
+  <a class="frame" href="{{ latest.url | relative_url }}">
+    <img src="{{ latest.photo | relative_url }}" alt="{{ latest.alt | default: 'The workbench, seen from above' }}" width="1600" height="900">
+    <span class="corners wrap">
+      <span class="corner">Fig. {% include week.html date=latest.date pad=true %}</span>
+      <span class="corner live">On the bench</span>
+    </span>
+  </a>
+  <figcaption class="wrap">
+    <div class="caption">
+      <span class="week">Week {% include week.html date=latest.date pad=true %}</span>
+      <span class="cap">{{ latest.content | strip_html | strip }}</span>
+      <time datetime="{{ latest.date | date: '%Y-%m-%d' }}">{{ latest.date | date: "%b %-d, %Y" }}</time>
+    </div>
+  </figcaption>
+</figure>
+{% endif %}
+{% endif %}
 
-  .device { margin-block: 8px clamp(64px, 10vw, 112px); border: 1px solid var(--line); border-radius: 6px; background: radial-gradient(ellipse at 50% 0%, #1d1d1d 0%, var(--panel) 60%); padding: clamp(16px, 4vw, 48px); overflow: hidden; }
-  .device svg { display: block; width: 100%; height: auto; }
-  .caption { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px 24px; font-family: var(--mono); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--dim); margin-top: clamp(16px, 3vw, 32px); }
+<div class="wrap">
+  <section class="log" id="log">
+    <h2 class="section">Build log</h2>
+    {%- assign shown = 0 -%}
+    {% for post in paginator.posts %}
+      {%- if first_page and latest and post.url == latest.url %}{% continue %}{% endif -%}
+      {%- assign shown = shown | plus: 1 -%}
+      {% include entry.html entry=post link=true lazy=true %}
+    {% endfor %}
+    {% if shown == 0 %}<p class="empty">Nothing else yet. More soon.</p>{% endif %}
 
-  section.cols { border-top: 1px solid var(--line); padding-block: clamp(56px, 8vw, 96px); }
-  .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: clamp(28px, 4vw, 56px); }
-  .num { font-family: var(--mono); font-size: 13px; color: var(--red); letter-spacing: .08em; }
-  h2 { font-size: 13px; font-family: var(--mono); text-transform: uppercase; letter-spacing: .12em; color: var(--dim); font-weight: 400; margin: 0 0 40px; }
-  h3 { font-size: 22px; letter-spacing: -.01em; margin: 10px 0 10px; font-weight: 500; }
-  .grid p { color: #bdb9b1; margin: 0; }
-
-  .about { border-top: 1px solid var(--line); padding-block: clamp(56px, 8vw, 96px); display: grid; grid-template-columns: 1fr 2fr; gap: 40px; }
-  .about p { font-size: clamp(19px, 2.2vw, 26px); line-height: 1.4; margin: 0 0 1em; letter-spacing: -.01em; }
-  .about p.small { font-size: 17px; color: #bdb9b1; line-height: 1.55; }
-
-  .contact { border-top: 1px solid var(--line); padding-block: clamp(56px, 8vw, 96px); }
-  .contact .big { font-size: clamp(22px, 5.4vw, 64px); letter-spacing: -.03em; font-weight: 500; text-decoration: none; border-bottom: 2px solid var(--red); padding-bottom: 4px; overflow-wrap: anywhere; }
-  .contact .big:hover { color: var(--red); }
-  .contact p { color: #bdb9b1; max-width: 34em; margin: 28px 0 0; }
-
-  footer { border-top: 1px solid var(--line); }
-  footer .wrap { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 12px; padding-block: 28px; font-family: var(--mono); font-size: 12px; color: var(--dim); letter-spacing: .04em; }
-
-  @media (max-width: 760px) {
-    .grid, .about { grid-template-columns: 1fr; }
-    nav a:not(:last-child) { display: none; }
-    .about { gap: 0; }
-  }
-  @media (prefers-reduced-motion: reduce) { .tag::before, .key-lit, .spot, .turn, .slide { animation: none !important; } .spot { transform: translate(440px, 220px) scale(2.2); } }
-  .key-lit { animation: step 3.2s steps(1) infinite; }
-  .device svg * { transform-box: view-box; }
-  .spot { animation: sweep 14s ease-in-out infinite alternate; }
-  @keyframes sweep { 0% { transform: translate(140px, 150px); } 35% { transform: translate(330px, 330px); } 70% { transform: translate(720px, 150px); } 100% { transform: translate(650px, 340px); } }
-  .turn { transform-origin: 738px 210px; animation: turn 6s ease-in-out infinite alternate; }
-  @keyframes turn { from { transform: rotate(-40deg); } to { transform: rotate(24deg); } }
-  .slide { animation: slide 5s cubic-bezier(.7,0,.3,1) infinite alternate; }
-  @keyframes slide { 0%, 20% { transform: translateX(-110px); } 80%, 100% { transform: translateX(120px); } }
-  @keyframes step { 0%, 12% { fill: var(--red); } 12.01%, 100% { fill: #242424; } }
-</style>
-</head>
-<body>
-
-<header>
-  <div class="wrap">
-    <a class="logo" href="/" aria-label="Coded Machines home">
-      <svg viewBox="0 0 28 28" aria-hidden="true"><rect x="1" y="1" width="26" height="26" rx="3" fill="none" stroke="#f2efe8" stroke-width="2"/><rect x="7" y="7" width="6" height="6" fill="#e8321e"/><rect x="15" y="7" width="6" height="6" fill="#f2efe8"/><rect x="7" y="15" width="6" height="6" fill="#f2efe8"/><rect x="15" y="15" width="6" height="6" fill="#f2efe8"/></svg>
-      Coded Machines
-    </a>
-    <nav>
-      <a href="#instrument">Instrument</a>
-      <a href="#about">Company</a>
-      <a href="#contact">Contact</a>
+    {% if paginator.total_pages > 1 %}
+    <nav class="pager">
+      {% if paginator.previous_page %}<a href="{{ paginator.previous_page_path | relative_url }}">Later entries</a>{% else %}<span></span>{% endif %}
+      <span>Page {{ paginator.page }} of {{ paginator.total_pages }}</span>
+      {% if paginator.next_page %}<a href="{{ paginator.next_page_path | relative_url }}">Earlier entries</a>{% else %}<span></span>{% endif %}
     </nav>
-  </div>
-</header>
+    {% endif %}
+  </section>
 
-<main>
-  <div class="wrap">
-    <section class="hero">
-      <span class="tag">In development</span>
-      <h1>It&rsquo;s time for a <em>modern</em> sampler.</h1>
-      <p class="lede">Coded Machines designs and builds electronic musical instruments. Our first, a hands-on performance sampler and sequencer, is on the bench now.</p>
-    </section>
-
-    <figure class="device" id="instrument" aria-label="A glimpse of the first Coded Machines instrument">
-      <svg viewBox="0 0 880 440" role="img" aria-labelledby="dev-title">
-        <title id="dev-title">Fragments of an instrument in development, partly lit</title>
-        <defs>
-          <pattern id="dots" width="22" height="22" patternUnits="userSpaceOnUse"><circle cx="11" cy="11" r="1.1" fill="#f2efe8"/></pattern>
-          <radialGradient id="vig" cx="50%" cy="50%" r="55%"><stop offset="0" stop-color="#fff"/><stop offset=".7" stop-color="#fff" stop-opacity=".35"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></radialGradient>
-          <mask id="vignette"><rect width="880" height="440" fill="url(#vig)"/></mask>
-          <radialGradient id="spotg"><stop offset="0" stop-color="#fff"/><stop offset=".55" stop-color="#fff" stop-opacity=".6"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></radialGradient>
-          <mask id="reveal"><rect width="880" height="440" fill="#000"/><circle class="spot" cx="0" cy="0" r="210" fill="url(#spotg)"/></mask>
-          <filter id="soft"><feGaussianBlur stdDeviation="1.2"/></filter>
-          <g id="frag">
-            <!-- a sliver of a waveform -->
-            <path d="M70 118 C 96 70, 118 150, 146 108 S 196 60, 226 124 S 270 150, 300 96" fill="none" stroke="#e8321e" stroke-width="2.5" filter="url(#soft)"/>
-            <rect x="70" y="150" width="232" height="2" fill="#f2efe8" opacity=".5"/>
-            <!-- keys, most of them left in the dark -->
-            <g fill="none" stroke="#f2efe8" stroke-width="1.5" opacity=".8">
-              <rect x="96" y="268" width="40" height="40" rx="4"/><rect x="148" y="268" width="40" height="40" rx="4"/><rect x="200" y="268" width="40" height="40" rx="4"/>
-              <rect x="148" y="320" width="40" height="40" rx="4"/><rect x="252" y="320" width="40" height="40" rx="4"/>
-            </g>
-            <rect class="key-lit" x="200" y="320" width="40" height="40" rx="4" fill="#242424"/>
-            <rect class="key-lit" x="252" y="268" width="40" height="40" rx="4" fill="#242424" style="animation-delay:1.6s"/>
-            <!-- something that turns -->
-            <path d="M620 208 A 118 118 0 0 1 790 104" fill="none" stroke="#f2efe8" stroke-width="2"/>
-            <path d="M646 214 A 94 94 0 0 1 772 132" fill="none" stroke="#f2efe8" stroke-width="1" stroke-dasharray="2 7"/>
-            <g class="turn"><circle cx="738" cy="92" r="5" fill="#e8321e"/></g>
-            <!-- something that slides -->
-            <line x1="520" y1="362" x2="800" y2="362" stroke="#3a3a3a" stroke-width="6" stroke-linecap="round"/>
-            <g class="slide"><rect x="646" y="344" width="12" height="36" rx="2" fill="#f2efe8"/></g>
-          </g>
-        </defs>
-        <rect width="880" height="440" fill="url(#dots)" opacity=".09" mask="url(#vignette)"/>
-        <use href="#frag" opacity=".08"/>
-        <use href="#frag" mask="url(#reveal)"/>
-        <g font-family="Space Mono, monospace" font-size="11" letter-spacing="1.5" fill="#6d6a65">
-          <text x="70" y="52">FIG. 01</text>
-          <text x="810" y="52" text-anchor="end">[ WITHHELD ]</text>
-          <text x="70" y="404">REV —</text>
-          <text x="810" y="404" text-anchor="end">NOT TO SCALE</text>
-        </g>
-        <g stroke="#4a4a4a" stroke-width="1">
-          <path d="M430 206v28M416 220h28"/><path d="M470 60v14M463 67h14"/><path d="M380 380v14M373 387h14"/>
-        </g>
-      </svg>
-      <figcaption class="caption"><span>Instrument 01</span><span>Details to be announced</span></figcaption>
-    </figure>
-  </div>
+  {% if first_page %}
+  {% include newsletter.html %}
 
   <section class="cols">
-    <div class="wrap">
-      <h2>What we're building</h2>
-      <div class="grid">
-        <div>
-          <span class="num">01</span>
-          <h3>Hands on everything</h3>
-          <p>Play it live, or program it step by step. Every sound and every move is one gesture away, with no menus in the way of the music.</p>
-        </div>
-        <div>
-          <span class="num">02</span>
-          <h3>Built for the stage</h3>
-          <p>Dedicated audio processors do the sound while a separate computer runs the interface, so playback never stutters, whatever you throw at it.</p>
-        </div>
-        <div>
-          <span class="num">03</span>
-          <h3>Designed in-house</h3>
-          <p>Enclosure, circuit boards, firmware and software, all developed by us from the ground up, and tested on the bench every day.</p>
-        </div>
+    <h2 class="section">What we&rsquo;re building</h2>
+    <div class="grid">
+      <div>
+        <span class="num">01</span>
+        <h3>Hands on everything</h3>
+        <p>Play it live, or program it step by step. Every sound and every move is one gesture away, with no menus in the way of the music.</p>
+      </div>
+      <div>
+        <span class="num">02</span>
+        <h3>Built for the stage</h3>
+        <p>Dedicated audio processors do the sound while a separate computer runs the interface, so playback never stutters, whatever you throw at it.</p>
+      </div>
+      <div>
+        <span class="num">03</span>
+        <h3>Designed in-house</h3>
+        <p>Enclosure, circuit boards, firmware and software, all developed by us from the ground up, and tested on the bench every day.</p>
       </div>
     </div>
   </section>
 
-  <div class="wrap">
-    <section class="about" id="about">
-      <h2>Company</h2>
-      <div>
-        <p>Coded Machines is an independent maker of electronic musical instruments, founded by musician and software engineer Marc-André Cournoyer.</p>
-        <p class="small">We make standalone hardware for sampling, sequencing and live performance, instruments meant to be played with both hands. Our first product is in active development, with more to share soon.</p>
-      </div>
-    </section>
+  <section class="about" id="about">
+    <h2 class="section">Company</h2>
+    <div>
+      <p>Coded Machines is an independent maker of electronic musical instruments, founded by musician and software engineer Marc-André Cournoyer.</p>
+      <p class="small">We make standalone hardware for sampling, sequencing and live performance, instruments meant to be played with both hands. Our first product is in active development, and this log follows it week by week.</p>
+    </div>
+  </section>
 
-    <section class="contact" id="contact">
-      <h2>Contact</h2>
-      <a class="big" href="mailto:hello@codedmachines.com">hello@codedmachines.com</a>
-      <p>For dealers, press, partnerships and early-access inquiries, write to us. We read everything.</p>
-    </section>
-  </div>
-</main>
-
-<footer>
-  <div class="wrap">
-    <span>© <span id="y">2026</span> Coded Inc.</span>
-    <span>Electronic musical instruments</span>
-  </div>
-</footer>
-<script>document.getElementById("y").textContent = new Date().getFullYear();</script>
-</body>
-</html>
+  <section class="contact" id="contact">
+    <h2 class="section">Contact</h2>
+    <a class="big" href="mailto:{{ site.email }}">{{ site.email }}</a>
+    <p>For dealers, press, partnerships and early-access inquiries, write to us. We read everything. For demos and more, follow <a href="https://www.instagram.com/{{ site.instagram }}/" rel="me">@{{ site.instagram }}</a> on Instagram.</p>
+  </section>
+  {% endif %}
+</div>

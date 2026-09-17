@@ -1,0 +1,5 @@
+{%- comment -%} Build week number for include.date, counted from site.build_start (a Monday). Both are cut to a date first so they parse in the same zone; the noon offset absorbs DST. {%- endcomment -%}
+{%- assign start = site.build_start | date: "%F" | date: "%s" | plus: 0 -%}
+{%- assign now = include.date | date: "%F" | date: "%s" | plus: 43200 -%}
+{%- assign n = now | minus: start | divided_by: 604800 | plus: 1 -%}
+{%- if include.pad and n < 10 %}0{% endif %}{{ n -}}

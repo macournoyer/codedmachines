@@ -15,3 +15,5 @@ Last week I spent a lot of time building a full mastering chain with sidechain d
 Although this demo barely scratches the surface, I'm very excited and proud of how easy it is to make something that sounds great, quickly.
 
 A lot more awesome stuff coming soon!
+
+— Marc

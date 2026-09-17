@@ -313,7 +313,10 @@ REVIEW_PAGE = <<~'HTML'
       Object.assign($("box").style, { left: left + "px", top: top + "px", width: w + "px", height: h + "px" }); render(); };
     v.onpointerup = () => { drag = null; };
     v.ondragstart = e => e.preventDefault();
-    setDay(Object.keys(DATA).at(-1));
+    // ?pick=DAY/HH-MM-SS&caption=... opens on that still with a draft caption, ready to check and publish.
+    const q = new URLSearchParams(location.search), [pd, pt] = (q.get("pick") || "").split("/");
+    if (DATA[pd]) { setDay(pd); const i = frames().findIndex(f => f.t === pt); if (i >= 0) idx = i; $("caption").value = q.get("caption") || ""; render(); }
+    else setDay(Object.keys(DATA).at(-1));
   </script></body></html>
 HTML
 

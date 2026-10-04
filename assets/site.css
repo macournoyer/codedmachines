@@ -78,6 +78,7 @@ h1 em { font-style: normal; color: var(--red); }
 .shot { margin: 0 0 16px; }
 .shot a { display: block; overflow: hidden; border-radius: 4px; box-shadow: 0 0 0 1px var(--line); background: var(--panel); }
 .shot img { width: 100%; }
+.shot video { display: block; width: 100%; height: auto; border-radius: 4px; box-shadow: 0 0 0 1px var(--line); background: var(--panel); }
 .prose { max-width: 40em; color: var(--soft); text-wrap: pretty; }
 .prose > :first-child { margin-top: 0; }
 .prose > :last-child { margin-bottom: 0; }

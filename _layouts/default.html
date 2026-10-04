@@ -10,7 +10,7 @@
 <meta property="og:url" content="{{ page.url | absolute_url }}">
 <meta property="og:title" content="{{ page_title | default: site.title | strip_html }}">
 <meta property="og:description" content="{{ page.excerpt | default: site.description | strip_html | strip_newlines | truncate: 200 }}">
-<meta property="og:image" content="{{ page.photo | default: '/brand/og.png' | absolute_url }}">
+<meta property="og:image" content="{{ page.photo | default: page.image | default: '/brand/og.png' | absolute_url }}">
 <meta name="theme-color" content="#0b0b0b">
 <link rel="icon" href="/favicon.ico" sizes="32x32">
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
